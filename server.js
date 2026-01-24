@@ -78,8 +78,10 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`📡 API available at http://localhost:${PORT}/api`);
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Server is running on ${HOST}:${PORT}`);
+  console.log(`📡 API available at http://${HOST}:${PORT}/api`);
   console.log(`🔌 WebSocket server ready`);
 });
