@@ -16,7 +16,10 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://electrophobia.tech',
+  'https://www.electrophobia.tech',
   'https://electro-phobia.vercel.app',
+  'http://localhost:3000',
   'http://localhost:3001'
 ];
 
