@@ -79,7 +79,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// Health check route
+// Health check routes (Railway checks root path)
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'ElectroPhobia API is running' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'ElectroPhobia API is running' });
 });
