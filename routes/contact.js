@@ -237,8 +237,6 @@ router.post('/', async (req, res) => {
         : 'Failed to send message. Please try again later.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
   }
 });
 
