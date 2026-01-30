@@ -88,14 +88,12 @@ router.post('/', async (req, res) => {
     });
 
     await contactMessage.save();
-    console.log('✅ Contact message saved to database:', contactMessage._id);
 
     res.json({
       success: true,
       message: 'Message sent successfully! We will get back to you soon.',
     });
   } catch (error) {
-    console.error('❌ Error saving contact message:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send message. Please try again later.',
