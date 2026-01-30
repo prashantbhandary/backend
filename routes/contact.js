@@ -26,7 +26,23 @@ let emailConfigured = false;
 try {
   const nodemailer = require('nodemailer');
   
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  // Check for SendGrid API key first
+  if (process.env.SENDGRID_API_KEY) {
+    console.log('📧 Using SendGrid for email');
+    transporter = nodemailer.createTransport({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'apikey',
+        pass: process.env.SENDGRID_API_KEY,
+      },
+    });
+    emailConfigured = true;
+    console.log('✅ SendGrid configured');
+  }
+  // Fallback to Gmail
+  else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     console.log('📧 Initializing email with user:', process.env.EMAIL_USER);
     console.log('📧 Password length:', process.env.EMAIL_PASS?.length, 'chars');
     
@@ -142,8 +158,12 @@ router.post('/', async (req, res) => {
     };
 
     // Email options
+    const fromEmail = process.env.SENDGRID_API_KEY 
+      ? 'noreply@electrophobia.tech' // Use your verified domain with SendGrid
+      : process.env.EMAIL_USER;
+    
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: fromEmail,
       to: 'electrophobiatech@gmail.com',
       subject: `Contact Form: ${sanitizedSubject}`,
       html: `
