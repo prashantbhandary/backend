@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const Contact = require('../models/Contact');
 
 // Email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,67 +20,8 @@ setInterval(() => {
   }
 }, RATE_LIMIT_WINDOW);
 
-// Initialize nodemailer only if credentials are available
-let transporter = null;
-let emailConfigured = false;
-
-try {
-  const nodemailer = require('nodemailer');
-  
-  // Check for SendGrid API key first
-  if (process.env.SENDGRID_API_KEY) {
-    console.log('📧 Using SendGrid for email');
-    transporter = nodemailer.createTransport({
-      host: 'smtp.sendgrid.net',
-      port: 587,
-      secure: false,
-      auth: {
-        user: 'apikey',
-        pass: process.env.SENDGRID_API_KEY,
-      },
-    });
-    emailConfigured = true;
-    console.log('✅ SendGrid configured');
-  }
-  // Fallback to Gmail
-  else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    console.log('📧 Initializing email with user:', process.env.EMAIL_USER);
-    console.log('📧 Password length:', process.env.EMAIL_PASS?.length, 'chars');
-    
-    transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // use TLS
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-    
-    // Set configured to true immediately, will verify async
-    emailConfigured = true;
-    
-    // Verify configuration (async, non-blocking)
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('❌ Email configuration error:', error.message);
-        emailConfigured = false;
-      } else {
-        console.log('✅ Email server is ready to send messages');
-      }
-    });
-  } else {
-    console.warn('⚠️  Email not configured. EMAIL_USER:', !!process.env.EMAIL_USER, 'EMAIL_PASS:', !!process.env.EMAIL_PASS);
-  }
-} catch (error) {
-  console.warn('⚠️  Nodemailer not installed. Run: npm install nodemailer');
-}
-
 // @route   POST /api/contact
-// @desc    Send contact email
+// @desc    Save contact message to database
 // @access  Public (with rate limiting)
 router.post('/', async (req, res) => {
   try {
@@ -136,16 +78,32 @@ router.post('/', async (req, res) => {
       rateLimitMap.set(clientIP, { firstRequest: now, count: 1 });
     }
 
-    // Check if email is configured
-    if (!transporter || !emailConfigured) {
-      console.log('📧 Email not configured, logging message instead:');
-      console.log({ name: sanitizedName, email, subject: sanitizedSubject, message: sanitizedMessage });
-      
-      return res.json({
-        success: true,
-        message: 'Message received (email not configured on server)',
-      });
-    }
+    // Save to database
+    const contactMessage = new Contact({
+      name: sanitizedName,
+      email,
+      subject: sanitizedSubject,
+      message: sanitizedMessage,
+      ipAddress: clientIP,
+    });
+
+    await contactMessage.save();
+    console.log('✅ Contact message saved to database:', contactMessage._id);
+
+    res.json({
+      success: true,
+      message: 'Message sent successfully! We will get back to you soon.',
+    });
+  } catch (error) {
+    console.error('❌ Error saving contact message:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send message. Please try again later.',
+    });
+  }
+});
+
+module.exports = router;
 
     // Send email with timeout
     const sendWithTimeout = (mailOptions, timeout = 30000) => {
