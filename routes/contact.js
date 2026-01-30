@@ -125,11 +125,11 @@ router.post('/', async (req, res) => {
     }
 
     // Send email with timeout
-    const sendWithTimeout = (mailOptions, timeout = 10000) => {
+    const sendWithTimeout = (mailOptions, timeout = 30000) => {
       return Promise.race([
         transporter.sendMail(mailOptions),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email send timeout')), timeout)
+          setTimeout(() => reject(new Error('Email send timeout - Gmail may be blocking the connection')), timeout)
         )
       ]);
     };
