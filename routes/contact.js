@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
 
 // Email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -8,7 +7,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Rate limiting map (simple in-memory rate limiting)
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
-const MAX_REQUESTS = 3; // Max 3 emails per hour per IP
+const MAX_REQUESTS = 10; // Max 10 emails per hour per IP
 
 // Clean up old entries from rate limit map
 setInterval(() => {
@@ -20,14 +19,38 @@ setInterval(() => {
   }
 }, RATE_LIMIT_WINDOW);
 
-// Configure nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'electrophobiatech@gmail.com',
-    pass: process.env.EMAIL_PASS, // App password from Gmail
-  },
-});
+// Initialize nodemailer only if credentials are available
+let transporter = null;
+let emailConfigured = false;
+
+try {
+  const nodemailer = require('nodemailer');
+  
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+    
+    // Verify configuration
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('❌ Email configuration error:', error.message);
+        emailConfigured = false;
+      } else {
+        console.log('✅ Email server is ready to send messages');
+        emailConfigured = true;
+      }
+    });
+  } else {
+    console.warn('⚠️  Email not configured. Set EMAIL_USER and EMAIL_PASS in .env');
+  }
+} catch (error) {
+  console.warn('⚠️  Nodemailer not installed. Run: npm install nodemailer');
+}
 
 // @route   POST /api/contact
 // @desc    Send contact email
@@ -87,9 +110,30 @@ router.post('/', async (req, res) => {
       rateLimitMap.set(clientIP, { firstRequest: now, count: 1 });
     }
 
+    // Check if email is configured
+    if (!transporter || !emailConfigured) {
+      console.log('📧 Email not configured, logging message instead:');
+      console.log({ name: sanitizedName, email, subject: sanitizedSubject, message: sanitizedMessage });
+      
+      return res.json({
+        success: true,
+        message: 'Message received (email not configured on server)',
+      });
+    }
+
+    // Send email with timeout
+    const sendWithTimeout = (mailOptions, timeout = 10000) => {
+      return Promise.race([
+        transporter.sendMail(mailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email send timeout')), timeout)
+        )
+      ]);
+    };
+
     // Email options
     const mailOptions = {
-      from: process.env.EMAIL_USER || 'electrophobiatech@gmail.com',
+      from: process.env.EMAIL_USER,
       to: 'electrophobiatech@gmail.com',
       subject: `Contact Form: ${sanitizedSubject}`,
       html: `
@@ -119,15 +163,18 @@ router.post('/', async (req, res) => {
       replyTo: email,
     };
 
-    // Send email
-    await transporter.sendMail(mailOptions);
+    // Send email with timeout
+    console.log('📧 Sending email to electrophobiatech@gmail.com...');
+    await sendWithTimeout(mailOptions);
+    console.log('✅ Main email sent successfully');
 
-    // Send confirmation email to user
-    const confirmationMailOptions = {
-      from: process.env.EMAIL_USER || 'electrophobiatech@gmail.com',
-      to: email,
-      subject: 'Thank you for contacting ElectroPhobia',
-      html: `
+    // Send confirmation email to user (optional, non-blocking)
+    try {
+      const confirmationMailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Thank you for contacting ElectroPhobia',
+        html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #22C0B3; border-bottom: 2px solid #22C0B3; padding-bottom: 10px;">
             Thank You for Reaching Out!
@@ -151,19 +198,26 @@ router.post('/', async (req, res) => {
           </p>
         </div>
       `,
-    };
+      };
 
-    await transporter.sendMail(confirmationMailOptions);
+      await sendWithTimeout(confirmationMailOptions);
+      console.log('✅ Confirmation email sent to user');
+    } catch (confirmError) {
+      console.warn('⚠️  Failed to send confirmation email:', confirmError.message);
+      // Don't fail the request if confirmation email fails
+    }
 
     res.json({
       success: true,
       message: 'Message sent successfully',
     });
   } catch (error) {
-    console.error('Email error:', error);
+    console.error('❌ Email error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to send message. Please try again later.',
+      message: error.message === 'Email send timeout' 
+        ? 'Email service timeout. Please try again.' 
+        : 'Failed to send message. Please try again later.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
