@@ -28,12 +28,19 @@ try {
   
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     console.log('📧 Initializing email with user:', process.env.EMAIL_USER);
+    console.log('📧 Password length:', process.env.EMAIL_PASS?.length, 'chars');
+    
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // use TLS
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
     
     // Set configured to true immediately, will verify async
@@ -216,11 +223,20 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Email error:', error);
+    console.error('❌ Full error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    
     res.status(500).json({
       success: false,
-      message: error.message === 'Email send timeout' 
-        ? 'Email service timeout. Please try again.' 
+      message: error.message.includes('timeout') 
+        ? 'Email service timeout - please check Gmail configuration' 
         : 'Failed to send message. Please try again later.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
