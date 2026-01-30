@@ -27,6 +27,7 @@ try {
   const nodemailer = require('nodemailer');
   
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    console.log('📧 Initializing email with user:', process.env.EMAIL_USER);
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -35,18 +36,20 @@ try {
       },
     });
     
-    // Verify configuration
+    // Set configured to true immediately, will verify async
+    emailConfigured = true;
+    
+    // Verify configuration (async, non-blocking)
     transporter.verify((error, success) => {
       if (error) {
         console.error('❌ Email configuration error:', error.message);
         emailConfigured = false;
       } else {
         console.log('✅ Email server is ready to send messages');
-        emailConfigured = true;
       }
     });
   } else {
-    console.warn('⚠️  Email not configured. Set EMAIL_USER and EMAIL_PASS in .env');
+    console.warn('⚠️  Email not configured. EMAIL_USER:', !!process.env.EMAIL_USER, 'EMAIL_PASS:', !!process.env.EMAIL_PASS);
   }
 } catch (error) {
   console.warn('⚠️  Nodemailer not installed. Run: npm install nodemailer');
