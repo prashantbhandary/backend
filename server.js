@@ -63,12 +63,14 @@ const authRoutes = require('./routes/auth');
 const experienceRoutes = require('./routes/experiences');
 const projectRoutes = require('./routes/projects');
 const blogRoutes = require('./routes/blogs');
+const productRoutes = require('./routes/products');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/experiences', experienceRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/blogs', blogRoutes);
+app.use('/api/products', productRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
