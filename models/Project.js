@@ -8,7 +8,7 @@ const projectSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['IoT', 'Robotics', 'Embedded', 'Power Electronics', 'Communication', 'Other']
+    enum: ['IoT', 'Robotics', 'Embedded', 'PCB Design', 'Automation', 'Power Electronics', 'Communication', 'Other']
   },
   description: {
     type: String,
