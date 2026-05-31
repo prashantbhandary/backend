@@ -5,12 +5,17 @@ const dotenv = require('dotenv');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
 
 // Load environment variables
 dotenv.config();
 
 // Initialize express app
 const app = express();
+// Render sits behind a proxy — trust it so rate-limiting & logs see the real client IP
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Initialize Socket.IO
@@ -34,6 +39,15 @@ const io = new Server(server, {
 // Make io accessible to routes
 app.set('io', io);
 
+// ── Security middleware ───────────────────────────────────────────────
+// Sets safe HTTP headers (HSTS, nosniff, frameguard, etc.). CSP is disabled
+// here because this is a JSON API (the frontend defines its own CSP), and
+// cross-origin resource policy is opened so the frontend can load /uploads images.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
@@ -47,8 +61,29 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Strip out any keys containing "$" or "." to block NoSQL/operator injection
+app.use(mongoSanitize());
+
+// Rate limiting — protect against brute-force & abuse (counts real IP via trust proxy)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,        // 15 minutes
+  max: 600,                         // generous for read-heavy public pages
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,                          // tight: login/register are the brute-force targets
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts, please try again later.' },
+});
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
